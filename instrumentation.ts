@@ -17,15 +17,20 @@ import {
   isOpenInferenceSpan,
 } from "@arizeai/openinference-vercel";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { SEMRESATTRS_PROJECT_NAME } from "@arizeai/openinference-semantic-conventions";
 
 const projectName = process.env.ARIZE_PROJECT_NAME ?? "acv-hackathon-agent";
 
 export function register() {
   registerOTel({
     serviceName: projectName,
-    // REQUIRED: Arize rejects spans (HTTP 500) without a project-name resource
-    // attribute. The TS quickstart uses `model_id`. service.name alone is NOT enough.
-    attributes: { model_id: projectName },
+    // REQUIRED: Arize rejects spans without a project-name resource attribute
+    // (service.name alone is NOT enough). The OpenInference canonical key is
+    // `openinference.project.name` (SEMRESATTRS_PROJECT_NAME); also set `model_id` as a fallback.
+    attributes: {
+      [SEMRESATTRS_PROJECT_NAME]: projectName,
+      model_id: projectName,
+    },
     spanProcessors: [
       new OpenInferenceSimpleSpanProcessor({
         exporter: new OTLPTraceExporter({

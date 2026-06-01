@@ -41,6 +41,9 @@ export async function runAgent(prompt: string) {
           // Manual span so the payment + cost shows up as its own node in AX.
           tracer.startActiveSpan("x402.payment", async (span) => {
             span.setAttributes({
+              // mark as an OpenInference span so the instrumentation's spanFilter
+              // (isOpenInferenceSpan) exports it to AX — otherwise the cost span is dropped.
+              "openinference.span.kind": "TOOL",
               "payment.asset": "USDC",
               "payment.network": process.env.X402_NETWORK ?? "base-sepolia",
               "payment.price_usd": 0.01,
