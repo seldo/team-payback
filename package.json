@@ -10,27 +10,24 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ai": "^4.0.0",
-    "@ai-sdk/openai": "^1.0.0",
-    "next": "^15.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zod": "^3.23.8",
-    "@arizeai/openinference-vercel": "^2.0.0",
-    "@vercel/otel": "^1.10.0",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-trace-otlp-proto": "^0.52.0",
-    "@opentelemetry/resources": "^1.25.0",
-    "@opentelemetry/sdk-trace-base": "^1.25.0",
-    "viem": "^2.21.0",
-    "x402-fetch": "^0.1.0",
-    "x402-next": "^0.1.0"
+    "ai": "^6.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.2",
+    "@arizeai/openinference-vercel": "^2.7.6",
+    "@vercel/otel": "^2.1.2",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.218.0",
+    "viem": "^2.51.3",
+    "x402-fetch": "^1.2.0",
+    "x402-next": "^1.2.0"
   },
   "devDependencies": {
     "typescript": "^5.5.4",
     "@types/node": "^20.14.0",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0"
-  },
-  "//": "Versions are indicative. @arizeai/openinference-vercel + @vercel/otel + @opentelemetry/* are verified against the Arize Vercel-AI-SDK integration doc. x402-fetch / x402-next versions MUST be confirmed with Coinbase (Kevin) — pin to whatever the hackathon uses."
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
 }

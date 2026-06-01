@@ -16,10 +16,16 @@ export const middleware = paymentMiddleware(
   {
     "/api/paid-data": {
       price: "$0.01",
-      network: process.env.X402_NETWORK ?? "base-sepolia",
+      // x402-next types `network` as a fixed union; base-sepolia is the hackathon network.
+      // Change this literal if you target a different chain.
+      network: "base-sepolia",
     },
   },
-  { url: process.env.X402_FACILITATOR_URL ?? "" } // Coinbase-hosted facilitator
+  // ⚠️ [x402 — Kevin] confirm the real facilitator URL. Default is the public x402 testnet facilitator.
+  {
+    url: (process.env.X402_FACILITATOR_URL ||
+      "https://x402.org/facilitator") as `${string}://${string}`,
+  }
 );
 
 export const config = { matcher: ["/api/paid-data"] };

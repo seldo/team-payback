@@ -1,4 +1,4 @@
-import { generateText, tool } from "ai";
+import { generateText, tool, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { privateKeyToAccount } from "viem/accounts";
@@ -29,14 +29,14 @@ export async function runAgent(prompt: string) {
   return generateText({
     model: openai(process.env.MODEL ?? "gpt-4o-mini"),
     prompt,
-    maxSteps: 5,
+    stopWhen: stepCountIs(5), // AI SDK v5+ multi-step (was maxSteps in v4)
     // Emits OpenInference spans → Arize AX (see instrumentation.ts).
     experimental_telemetry: { isEnabled: true, functionId: "hello-paid-agent" },
     tools: {
       getPremiumData: tool({
         description:
           "Fetch premium market data for a stock or crypto symbol. Costs USDC per call — only use it when the question needs fresh/accurate data.",
-        parameters: z.object({ symbol: z.string() }),
+        inputSchema: z.object({ symbol: z.string() }), // AI SDK v5+ (was `parameters` in v4)
         execute: async ({ symbol }) =>
           // Manual span so the payment + cost shows up as its own node in AX.
           tracer.startActiveSpan("x402.payment", async (span) => {
