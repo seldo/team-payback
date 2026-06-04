@@ -49,7 +49,23 @@ npx skills add Arize-ai/arize-skills
 - **Iterate** — *"ax, use arize-dataset + arize-experiment to run my deployed agent against a dataset and score it."* (This is Agent Experimentation.)
 - **Improve** — *"ax, use arize-prompt-optimization on the failing cases to propose a better prompt."*
 
-Full walkthrough: the cookbooks in `vercel-partnership/artifacts/cookbooks/` (01–03).
+Full walkthrough: see **📚 Learn Arize AX** below, plus the [Arize skills](https://github.com/Arize-ai/arize-skills) that drive the `ax` commands.
+
+## 📚 Learn Arize AX (self-serve)
+
+New to AX? These are the canonical docs — enough to get from this template to your own traced, evaluated agent without anyone walking you through it.
+
+- **Start here:** [Arize AX docs](https://arize.com/docs/ax)
+- **Get your keys** (`ARIZE_API_KEY` + `ARIZE_SPACE_ID`): [API & Service Keys](https://arize.com/docs/ax/security-and-settings/api-keys) — then grab them at **app.arize.com → Settings → Space API Keys**.
+
+Mapped to the four-step build loop above:
+
+| Stage | What you're doing | Docs |
+|-------|-------------------|------|
+| **Trace** | emit spans (already wired in `instrumentation.ts`) | [Set up traces](https://arize.com/docs/ax/get-started/get-started-tracing) · [Vercel AI SDK integration](https://arize.com/docs/ax/integrations/ts-js-agent-frameworks/vercel) — exactly what this template uses |
+| **Evaluate** | score the answer + track spend | [Evals overview](https://arize.com/docs/ax/evaluate/evals-overview) |
+| **Iterate** | run against a dataset / experiment | [Build a dataset](https://arize.com/docs/ax/improve/build-a-dataset) |
+| **Improve** | tune the prompt on the failing cases | [Prompt Playground](https://arize.com/docs/ax/prompts/prompt-playground) |
 
 ## Going live with x402
 
