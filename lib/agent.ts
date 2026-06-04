@@ -9,8 +9,9 @@ const tracer = trace.getTracer("paid-agent");
 
 /**
  * Fetch that pays for a 402 in LIVE mode, or a plain fetch in MOCK mode.
- * ⚠️ [x402 — Kevin/Coinbase verify] `wrapFetchWithPayment` signature + the
- * viem account shape. Dynamically imported so MOCK mode needs no wallet/keys.
+ * x402-fetch is dynamically imported ONLY in live mode, so the default (mock)
+ * path needs no wallet, no keys, and never loads anything from Coinbase.
+ * (Live `wrapFetchWithPayment` + viem account shape pinned to x402-fetch v1.2.0.)
  */
 async function payingFetch(url: string): Promise<Response> {
   if (MOCK) return fetch(url);

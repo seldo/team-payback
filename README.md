@@ -8,6 +8,8 @@ A working starter that combines all three hackathon stacks:
 
 The whole point: get from clone → a running agent whose **reasoning + payment + observability** you can see in one AX trace, in well under 30 minutes — then fork it for your hack.
 
+**Runs standalone.** In the default mock mode it needs only your **Arize + OpenAI** keys — no wallet, no Coinbase, no deploy, nothing to wait on. Live x402 payments and the Vercel deploy are optional add-ons (below).
+
 ```
 User → Agent (Vercel AI SDK)
          │  decides it needs data
@@ -22,7 +24,9 @@ User → Agent (Vercel AI SDK)
 
 ## Quick start (MOCK mode — ~5 min, no wallet needed)
 
-`MOCK_PAYMENTS=true` skips x402 entirely so you can run the agent + the full AX loop with just two API keys.
+`MOCK_PAYMENTS=true` (the default) skips x402 entirely so you can run the agent + the full AX loop with just two API keys — no external services.
+
+> Requires **Node ≥ 20.9** (`.nvmrc` pins 22 — `nvm use` if you have it).
 
 ```bash
 npm install
@@ -67,7 +71,9 @@ Mapped to the four-step build loop above:
 | **Iterate** | run against a dataset / experiment | [Build a dataset](https://arize.com/docs/ax/improve/build-a-dataset) |
 | **Improve** | tune the prompt on the failing cases | [Prompt Playground](https://arize.com/docs/ax/prompts/prompt-playground) |
 
-## Going live with x402
+## Optional — going live with x402 (Coinbase territory)
+
+Not required to run or demo the template. When you want real on-chain payments:
 
 ```bash
 # in .env.local
@@ -76,9 +82,11 @@ AGENT_WALLET_PRIVATE_KEY=0x...   # fund with testnet USDC (Base Sepolia faucet)
 RESOURCE_WALLET_ADDRESS=0x...
 X402_FACILITATOR_URL=...
 ```
-Now the agent's tool call hits the x402-gated `/api/paid-data`, pays, and the `x402.payment` span shows `mode=live` + the on-chain result.
+Now the agent's tool call hits the x402-gated `/api/paid-data`, pays, and the `x402.payment` span shows `mode=live` + the on-chain result. (In mock mode the `middleware.ts` gate is inert and nothing here is loaded.)
 
-## Deploy to Vercel
+## Optional — deploy to Vercel
+
+Not required — the template runs locally as-is.
 
 ```bash
 vercel               # or push to GitHub + import in the Vercel dashboard
@@ -88,23 +96,25 @@ Set the same env vars in **Project → Settings → Environment Variables**, and
 ## Project structure
 
 ```
-instrumentation.ts          Arize AX tracing (registerOTel + OpenInference)  ✅ verified
-middleware.ts               x402 gate on /api/paid-data                       ⚠️ x402
-lib/agent.ts                Vercel AI SDK agent + paid tool + cost span
+instrumentation.ts          Arize AX tracing (registerOTel + OpenInference)  ✅ core
+lib/agent.ts                Vercel AI SDK agent + paid tool + cost span      ✅ core
 lib/premium-data.ts         stand-in premium data provider (swap for a real API)
 app/api/agent/route.ts      POST { prompt } → runs the agent
-app/api/paid-data/route.ts  x402-gated premium data (live)
-app/api/data/route.ts       ungated premium data (mock)
+app/api/data/route.ts       ungated premium data — used in mock (default)
 app/page.tsx                minimal "try it" UI
+middleware.ts               x402 gate — INERT in mock, lazy in live          🔌 optional
+app/api/paid-data/route.ts  x402-gated premium data (live only)              🔌 optional
 ```
 
-## What's verified vs. TBD
+## What's real vs. mocked
 
-- ✅ **Arize AX instrumentation** — packages, exporter URL (`otlp.arize.com/v1/traces`), headers (`arize-space-id` / `arize-api-key`), and the required `model_id` project attribute are verified against the [Arize Vercel AI SDK doc](https://arize.com/docs/ax/integrations/ts-js-agent-frameworks/vercel). The `ax` CLI/skill commands are verified against `arize-ax-cli` + `arize-skills` (main).
-- ⚠️ **x402** (Kevin / Coinbase) — `x402-next` / `x402-fetch` package **versions + APIs**, the facilitator URL, and the wallet/account shape. Pin these before the dry-run.
-- ⚠️ **Vercel** (Glenn) — host this repo + add a one-click **Deploy** button; confirm the runtime.
-- ⏳ **Not yet built/run green:** a clean `npm install && npm run build` depends on the x402 versions above. Once Kevin pins them, run it and lock the lockfile.
+This repo is **standalone and build-green** — `npm install && npm run build` passes with no external setup.
+
+- ✅ **Arize AX** — fully wired and verified: packages, exporter URL (`otlp.arize.com/v1/traces`), headers (`arize-space-id` / `arize-api-key`), and the required project-name attribute, against the [Arize Vercel AI SDK doc](https://arize.com/docs/ax/integrations/ts-js-agent-frameworks/vercel). The `ax` CLI/skill commands track `arize-ax-cli` + `arize-skills` (main). **This is the part that matters — it works today.**
+- ✅ **Mock mode (default)** — runs standalone on only `OPENAI_API_KEY` + the three `ARIZE_*` vars. No wallet, no Coinbase, no deploy, nothing to wait on. The full AX trace (LLM → tool → `x402.payment` `mode=mock`) still renders.
+- 🔌 **Live x402 payments (optional)** — flip `MOCK_PAYMENTS=false` + add a funded wallet. Pinned to `x402-next` / `x402-fetch` v1.2.0; the live facilitator/network/wallet specifics are Coinbase's to own and don't touch the standalone path.
+- 🔌 **Vercel deploy (optional)** — `vercel` or import in the dashboard. Runs locally without it.
 
 ## Tracks
-- **Track 1 (10K On-Chain Business):** make the agent reason about whether a purchase is worth it (budget + value). See cookbook 02.
-- **Track 2 (10x Dev Productivity):** make the paid tool a dev capability (premium search / real-time data). See cookbook 03.
+- **Track 1 (10K On-Chain Business):** make the agent reason about whether a purchase is worth it (budget + value) — extend `lib/agent.ts` and the paid tool.
+- **Track 2 (10x Dev Productivity):** make the paid tool a real dev capability (premium search / real-time data) — swap `lib/premium-data.ts` for a real API.

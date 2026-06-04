@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "Coinbase x402 × Arize AX × Vercel — starter: an agent that pays per tool call, fully traced in Arize AX.",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
