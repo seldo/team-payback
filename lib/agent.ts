@@ -65,41 +65,92 @@ export async function runAgent(prompt: string) {
 
   return generateText({
     model: openai(process.env.MODEL ?? "gpt-4o-mini"),
-    prompt: `${prompt}\n\nIMPORTANT: Always call checkPaymentConfig first. Only call getPremiumData if checkPaymentConfig returns accessible: true. If accessible is false, report the error and do not pay.`,
+    prompt: `${prompt}\n\nIMPORTANT: Always call checkPaymentConfig first. It evaluates the server's trustworthiness using Arize eval data and returns shouldPay (boolean) and a detailed reason. Only call getPremiumData if shouldPay is true. If shouldPay is false, respond to the user with the full reason explaining why payment was withheld — include the trustworthiness score and per-eval breakdown.`,
     stopWhen: stepCountIs(5), // AI SDK v5+ multi-step (was maxSteps in v4)
     // Emits OpenInference spans → Arize AX (see instrumentation.ts).
     experimental_telemetry: { isEnabled: true, functionId: "hello-paid-agent" },
     tools: {
-      // Pre-tool: probe the x402 endpoint and return config before any payment fires.
-      // Always hits /api/paid-data so the rpcUrl is available even in MOCK mode.
+      // Pre-tool: fetch Arize eval data, compute a trustworthiness score, and decide
+      // whether to pay. Always runs before getPremiumData.
       checkPaymentConfig: tool({
         description:
-          "Check the x402 payment config (e.g. rpcUrl) before making a paid request. Always call this first.",
+          "Evaluate server trustworthiness using Arize eval data before making a paid request. Always call this first.",
         inputSchema: z.object({}),
         execute: async () => {
-          // Step 1: read rpcUrl from the x402 402 response description field
+          // Step 1: hit /api/paid-data to get the evalsUrl from the 402 description field.
           const probe = await fetch(`${base}/api/paid-data`);
-          if (probe.status !== 402) return { error: `Expected 402, got ${probe.status}` };
+          if (probe.status !== 402) return { shouldPay: false, reason: `Expected 402 from paid-data, got ${probe.status}` };
           const body = await probe.json();
-          const rpcUrl = body.accepts?.[0]?.description ?? null;
-          console.log("[checkPaymentConfig] rpcUrl from x402 description:", rpcUrl);
+          const evalsUrl = body.accepts?.[0]?.description ?? null;
+          console.log("[checkPaymentConfig] evalsUrl:", evalsUrl);
 
-          if (!rpcUrl) return { config: null, accessible: false, error: "no rpcUrl in x402 description" };
+          if (!evalsUrl) return { shouldPay: false, reason: "No evals URL found in x402 description field." };
 
-          // Step 2: verify the RPC URL is reachable with a lightweight eth_chainId probe
+          // Step 2: fetch eval data and compute a trustworthiness score.
+          let evalsData: { spans: any[]; evalColumns: string[] };
           try {
-            const rpcProbe = await fetch(rpcUrl, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ jsonrpc: "2.0", method: "eth_chainId", params: [], id: 1 }),
-            });
-            const accessible = rpcProbe.ok;
-            console.log(`[checkPaymentConfig] RPC accessible: ${accessible} (HTTP ${rpcProbe.status})`);
-            return { config: { rpcUrl }, accessible };
+            const evalsRes = await fetch(evalsUrl);
+            if (!evalsRes.ok) {
+              return { shouldPay: false, reason: `Evals endpoint returned HTTP ${evalsRes.status} — cannot verify server trustworthiness.` };
+            }
+            evalsData = await evalsRes.json();
           } catch (err) {
-            console.log(`[checkPaymentConfig] RPC unreachable:`, err);
-            return { config: { rpcUrl }, accessible: false, error: String(err) };
+            return { shouldPay: false, reason: `Failed to reach evals endpoint: ${String(err)}` };
           }
+
+          const spans = evalsData.spans ?? [];
+
+          // A label is "good" if it is a positive term; otherwise we fall back to score >= 0.5.
+          const POSITIVE_LABELS = new Set(["correct", "good", "pass", "passed", "yes", "true", "success"]);
+          let total = 0;
+          let good = 0;
+          const evalBreakdown: Record<string, { good: number; total: number }> = {};
+
+          for (const span of spans) {
+            for (const ev of span.evaluations ?? []) {
+              total++;
+              const name: string = ev.name ?? "unknown";
+              evalBreakdown[name] ??= { good: 0, total: 0 };
+              evalBreakdown[name].total++;
+
+              // Prefer numeric score (0/1 or 0.0–1.0) when present; fall back to label text.
+              const isGood =
+                typeof ev.score === "number"
+                  ? ev.score >= 0.5
+                  : POSITIVE_LABELS.has(String(ev.label ?? "").toLowerCase());
+
+              if (isGood) {
+                good++;
+                evalBreakdown[name].good++;
+              }
+            }
+          }
+
+          console.log(`[checkPaymentConfig] score: ${good}/${total}`, evalBreakdown);
+
+          if (total === 0) {
+            return {
+              shouldPay: false,
+              score: null,
+              breakdown: evalBreakdown,
+              reason:
+                "No evaluation data is available for this server. Payment withheld — trustworthiness cannot be verified.",
+            };
+          }
+
+          const score = good / total;
+          const THRESHOLD = 0.7;
+          const shouldPay = score >= THRESHOLD;
+
+          const breakdownLines = Object.entries(evalBreakdown)
+            .map(([name, { good: g, total: t }]) => `  • ${name}: ${g}/${t} good (${((g / t) * 100).toFixed(1)}%)`)
+            .join("\n");
+
+          const reason = shouldPay
+            ? `Trustworthiness score ${(score * 100).toFixed(1)}% (${good}/${total} evaluations passed ≥${THRESHOLD * 100}% threshold). Proceeding with payment.\n${breakdownLines}`
+            : `Trustworthiness score too low: ${(score * 100).toFixed(1)}% (${good}/${total} evaluations passed, threshold is ${THRESHOLD * 100}%). Payment withheld.\n\nBreakdown by eval:\n${breakdownLines}`;
+
+          return { shouldPay, score, total, good, breakdown: evalBreakdown, reason };
         },
       }),
 
