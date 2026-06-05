@@ -31,6 +31,12 @@ function normalizeParams(params?: HttpStatusSpanInput): HttpStatusSpanParams {
   return typeof params === "number" ? { days: params } : params ?? {};
 }
 
+// spanRecordsPublic samples/caps its result set per request: over a wide window
+// it silently drops rows (notably the payment-populated x402.payment spans we
+// need). Empirically a <=60m window returns the full, stable set, so we scan in
+// 60m chunks and dedupe by spanId across them.
+const CHUNK_MS = 60 * 60_000;
+
 /** Tally payment outcomes per trace/request. */
 async function getHttpStatusTally(
   params?: HttpStatusSpanInput
@@ -83,12 +89,26 @@ export interface Span {
   httpStatus: number;
   inputValue?: string;
   outputValue?: string;
+  // Payment-correlation attributes stamped by lib/agent.ts on x402.payment spans.
+  // Present only on settled live payments; the refund worker refunds from these.
+  paymentTxHash?: string;
+  payer?: string;
+  payee?: string;
+  amountAtomic?: string;
+  settled?: boolean;
+  network?: string;
 }
 
 const SPAN_COLUMNS = [
   "attributes.payment.http_status",
   "attributes.input.value",
   "attributes.output.value",
+  "attributes.payment.tx_hash",
+  "attributes.payment.payer",
+  "attributes.payment.payee",
+  "attributes.payment.amount_atomic",
+  "attributes.payment.settled",
+  "attributes.payment.network",
 ];
 
 const TIME_RANGE_BUFFER_MS = 24 * 60 * 60 * 1000; // 1 day
@@ -143,9 +163,10 @@ function parseDate(value: string, label: string): Date {
 }
 
 /**
- * Page through span records that carry `attributes.payment.http_status` and map
- * each into a Span. Columns are matched by name (not position) for robustness.
- * Time range can be explicit; otherwise it spans the full available project range.
+ * Fetch span records carrying `attributes.payment.http_status` across [start, end],
+ * scanning in <=60m chunks (see CHUNK_MS) so spanRecordsPublic's per-window
+ * sampling never drops the payment-populated spans. Columns are matched by name
+ * (not position) and deduped by spanId across chunks/pages.
  */
 async function fetchHttpStatusSpansInWindow(
   apiKey: string,
@@ -154,19 +175,50 @@ async function fetchHttpStatusSpansInWindow(
   start: Date,
   end: Date
 ): Promise<Span[]> {
+  const spans: Span[] = [];
+  const seen = new Set<string>(); // dedupe across overlapping chunks/pages
+
+  // Walk newest -> oldest in 60m slices. Each slice is paged independently.
+  for (
+    let chunkEnd = end.getTime();
+    chunkEnd > start.getTime();
+    chunkEnd -= CHUNK_MS
+  ) {
+    const chunkStart = Math.max(start.getTime(), chunkEnd - CHUNK_MS);
+    await fetchWindow(
+      new Date(chunkStart),
+      new Date(chunkEnd),
+      { apiKey, spaceId, projectId },
+      spans,
+      seen
+    );
+  }
+
+  return spans;
+}
+
+/**
+ * Page a single (<=60m) time window, appending mapped Spans to `spans` and
+ * recording their ids in `seen` for cross-window dedupe.
+ */
+async function fetchWindow(
+  start: Date,
+  end: Date,
+  auth: { apiKey: string; spaceId: string; projectId: string },
+  spans: Span[],
+  seen: Set<string>
+): Promise<void> {
   const dataset =
     `startTime: ${JSON.stringify(start.toISOString())}, ` +
     `endTime: ${JSON.stringify(end.toISOString())}, ` +
     `environmentName: tracing, externalModelVersionIds: [], externalBatchIds: []`;
 
-  const spans: Span[] = [];
-  const seen = new Set<string>(); // the pager can return the same span twice
   let after: string | null = null;
 
   do {
     const afterArg = after ? `, after: ${JSON.stringify(after)}` : "";
     const query = `{
-      node(id: ${JSON.stringify(projectId)}) {
+      node(id: ${JSON.stringify(auth.projectId)}) {
         ... on Model {
           spanRecordsPublic(
             first: ${PAGE_SIZE}${afterArg}
@@ -200,8 +252,8 @@ async function fetchHttpStatusSpansInWindow(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": apiKey,
-        "space-id": spaceId,
+        "x-api-key": auth.apiKey,
+        "space-id": auth.spaceId,
       },
       body: JSON.stringify({ query }),
     });
@@ -236,8 +288,13 @@ async function fetchHttpStatusSpansInWindow(
       const col = (n: string) => node.columns.find((c) => c.name === n)?.value;
       const httpStatus = col("attributes.payment.http_status")?.num;
       if (typeof httpStatus !== "number") continue; // only x402 payment spans carry it
-      if (seen.has(node.spanId)) continue; // skip duplicates from pagination
+      if (seen.has(node.spanId)) continue; // skip duplicates from pagination/chunks
       seen.add(node.spanId);
+
+      // Payment-correlation attrs are stamped as strings (cat) by lib/agent.ts,
+      // except amount_atomic which may arrive numeric depending on ingestion.
+      const amount = col("attributes.payment.amount_atomic");
+      const settledVal = col("attributes.payment.settled");
       spans.push({
         traceId: node.traceId,
         spanId: node.spanId,
@@ -248,13 +305,21 @@ async function fetchHttpStatusSpansInWindow(
         httpStatus,
         inputValue: col("attributes.input.value")?.cat || undefined,
         outputValue: col("attributes.output.value")?.cat || undefined,
+        paymentTxHash: col("attributes.payment.tx_hash")?.cat || undefined,
+        payer: col("attributes.payment.payer")?.cat || undefined,
+        payee: col("attributes.payment.payee")?.cat || undefined,
+        amountAtomic:
+          amount?.cat ??
+          (typeof amount?.num === "number" ? String(amount.num) : undefined),
+        settled: settledVal
+          ? settledVal.cat === "true" || settledVal.num === 1
+          : undefined,
+        network: col("attributes.payment.network")?.cat || undefined,
       });
     }
 
     after = conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
   } while (after);
-
-  return spans;
 }
 
 async function fetchHttpStatusSpans(

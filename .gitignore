@@ -10,3 +10,6 @@ out
 next-env.d.ts
 ax-probe.mjs
 *.tsbuildinfo
+
+# Refund worker runtime dedupe store
+data/refunds.json
