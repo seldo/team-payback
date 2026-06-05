@@ -64,11 +64,9 @@ export default function Home() {
           </CardContent>
         </Card>
       )}
-
-      <p className="mt-8 text-sm text-muted-foreground">
+      <p style={{ marginTop: 24, color: "#666", fontSize: 14 }}>
         Then open your project in <b>Arize AX</b> → see the trace: agent
-        reasoning → tool call → <code className="font-mono">x402.payment</code>{" "}
-        (with cost) → answer.
+        reasoning → tool call → <code>x402.payment</code> (with cost) → answer.
       </p>
     </main>
   );

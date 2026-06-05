@@ -17,21 +17,15 @@ chargeback, and the Vercel deploy are optional add-ons (below).
 
 ```
 User → Agent (Vercel AI SDK)
-         │  decides it needs data
-         ▼
-       tool: getPremiumData
-         │  fetch → 402 Payment Required
-         │           └─ challenge advertises: price + eval metadata URL     ← agent fetches JSON to inspect before paying
-         │  client confirms → auto-pay USDC → 200   (live mode)
-         ▼
-       /api/paid-data  (x402-gated)        // or /api/data, ungated, in MOCK mode
          │
-         ├─► response returned to the user
+         ├─ tool: checkPaymentConfig (free)
+         │    reads rpcUrl from 402 description → pings eth_chainId → accessible: true/false
          │
-         └─► Arize AX eval runs IN PARALLEL
-                  ├─ pass → done
-                  └─ fail (or non-200 error) → chargeback: on-chain USDC refund → payer
-       ── all traced in AX: LLM span → tool span → x402.payment → eval → (refund) ──
+         └─ tool: getPremiumData  (only if accessible: true)
+              fetch → 402 Payment Required → auto-pay USDC → 200   (live mode)
+              /api/paid-data  (x402-gated via withX402)   // or /api/data in MOCK mode
+              ▼
+            answer  ── traced in Arize AX: LLM → checkPaymentConfig → x402.payment (cost) ──
 ```
 
 ## How eval-gated payment works
@@ -156,9 +150,8 @@ lib/premium-data.ts         stand-in premium data provider (swap for a real API)
 app/api/agent/route.ts      POST { prompt } → runs the agent
 app/api/data/route.ts       ungated premium data — used in mock (default)
 app/page.tsx                minimal "try it" UI
-middleware.ts               x402 gate — INERT in mock, lazy in live          🔌 optional
-                              └─ where the eval advert (402 challenge) + refund logic plug in
-app/api/paid-data/route.ts  x402-gated premium data (live only)              🔌 optional
+middleware.ts               no-op pass-through (gate lives in route handler)  🔌 optional
+app/api/paid-data/route.ts  x402-gated via withX402; rpcUrl in description   🔌 optional
 ```
 
 ## What's real vs. mocked
