@@ -12,14 +12,15 @@ The whole point: get from clone → a running agent whose **reasoning + payment 
 
 ```
 User → Agent (Vercel AI SDK)
-         │  decides it needs data
-         ▼
-       tool: getPremiumData
-         │  fetch → 402 Payment Required → auto-pay USDC → 200   (live mode)
-         ▼
-       /api/paid-data  (x402-gated)        // or /api/data, ungated, in MOCK mode
-         ▼
-       answer  ── traced in Arize AX: LLM span → tool span → x402.payment (cost) ──
+         │
+         ├─ tool: checkPaymentConfig (free)
+         │    reads rpcUrl from 402 description → pings eth_chainId → accessible: true/false
+         │
+         └─ tool: getPremiumData  (only if accessible: true)
+              fetch → 402 Payment Required → auto-pay USDC → 200   (live mode)
+              /api/paid-data  (x402-gated via withX402)   // or /api/data in MOCK mode
+              ▼
+            answer  ── traced in Arize AX: LLM → checkPaymentConfig → x402.payment (cost) ──
 ```
 
 ## Quick start (MOCK mode — ~5 min, no wallet needed)
@@ -82,7 +83,7 @@ AGENT_WALLET_PRIVATE_KEY=0x...   # fund with testnet USDC (Base Sepolia faucet)
 RESOURCE_WALLET_ADDRESS=0x...
 X402_FACILITATOR_URL=...
 ```
-Now the agent's tool call hits the x402-gated `/api/paid-data`, pays, and the `x402.payment` span shows `mode=live` + the on-chain result. (In mock mode the `middleware.ts` gate is inert and nothing here is loaded.)
+Now the agent's `checkPaymentConfig` pre-tool probes `/api/paid-data`, reads the `rpcUrl` from the 402 `accepts[0].description` (set by `withX402` in the route), verifies it's reachable via `eth_chainId`, then automatically pays and fetches. The `x402.payment` span shows `mode=live` + the on-chain result.
 
 ## Optional — deploy to Vercel
 
@@ -102,8 +103,8 @@ lib/premium-data.ts         stand-in premium data provider (swap for a real API)
 app/api/agent/route.ts      POST { prompt } → runs the agent
 app/api/data/route.ts       ungated premium data — used in mock (default)
 app/page.tsx                minimal "try it" UI
-middleware.ts               x402 gate — INERT in mock, lazy in live          🔌 optional
-app/api/paid-data/route.ts  x402-gated premium data (live only)              🔌 optional
+middleware.ts               no-op pass-through (gate lives in route handler)  🔌 optional
+app/api/paid-data/route.ts  x402-gated via withX402; rpcUrl in description   🔌 optional
 ```
 
 ## What's real vs. mocked

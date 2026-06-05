@@ -29,14 +29,47 @@ export async function runAgent(prompt: string) {
 
   return generateText({
     model: openai(process.env.MODEL ?? "gpt-4o-mini"),
-    prompt,
+    prompt: `${prompt}\n\nIMPORTANT: Always call checkPaymentConfig first. Only call getPremiumData if checkPaymentConfig returns accessible: true. If accessible is false, report the error and do not pay.`,
     stopWhen: stepCountIs(5), // AI SDK v5+ multi-step (was maxSteps in v4)
     // Emits OpenInference spans → Arize AX (see instrumentation.ts).
     experimental_telemetry: { isEnabled: true, functionId: "hello-paid-agent" },
     tools: {
+      // Pre-tool: probe the x402 endpoint and return config before any payment fires.
+      // Always hits /api/paid-data so the rpcUrl is available even in MOCK mode.
+      checkPaymentConfig: tool({
+        description:
+          "Check the x402 payment config (e.g. rpcUrl) before making a paid request. Always call this first.",
+        inputSchema: z.object({}),
+        execute: async () => {
+          // Step 1: read rpcUrl from the x402 402 response description field
+          const probe = await fetch(`${base}/api/paid-data`);
+          if (probe.status !== 402) return { error: `Expected 402, got ${probe.status}` };
+          const body = await probe.json();
+          const rpcUrl = body.accepts?.[0]?.description ?? null;
+          console.log("[checkPaymentConfig] rpcUrl from x402 description:", rpcUrl);
+
+          if (!rpcUrl) return { config: null, accessible: false, error: "no rpcUrl in x402 description" };
+
+          // Step 2: verify the RPC URL is reachable with a lightweight eth_chainId probe
+          try {
+            const rpcProbe = await fetch(rpcUrl, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ jsonrpc: "2.0", method: "eth_chainId", params: [], id: 1 }),
+            });
+            const accessible = rpcProbe.ok;
+            console.log(`[checkPaymentConfig] RPC accessible: ${accessible} (HTTP ${rpcProbe.status})`);
+            return { config: { rpcUrl }, accessible };
+          } catch (err) {
+            console.log(`[checkPaymentConfig] RPC unreachable:`, err);
+            return { config: { rpcUrl }, accessible: false, error: String(err) };
+          }
+        },
+      }),
+
       getPremiumData: tool({
         description:
-          "Fetch premium market data for a stock or crypto symbol. Costs USDC per call — only use it when the question needs fresh/accurate data.",
+          "Fetch premium market data for a stock or crypto symbol. Costs USDC per call — only use it after checkPaymentConfig has confirmed the config is correct.",
         inputSchema: z.object({ symbol: z.string() }), // AI SDK v5+ (was `parameters` in v4)
         execute: async ({ symbol }) =>
           // Manual span so the payment + cost shows up as its own node in AX.
@@ -52,11 +85,16 @@ export async function runAgent(prompt: string) {
               "payment.resource": dataPath,
             });
             try {
+              console.log(`[getPremiumData] paying for ${symbol} via ${dataPath}`);
               const res = await payingFetch(
                 `${base}${dataPath}?symbol=${encodeURIComponent(symbol)}`
               );
               span.setAttribute("payment.http_status", res.status);
+              console.log(`[getPremiumData] response status: ${res.status}`);
               return await res.json();
+            } catch (err) {
+              console.error("[getPremiumData] tool error:", err);
+              throw err;
             } finally {
               span.end();
             }

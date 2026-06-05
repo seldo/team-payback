@@ -69,8 +69,8 @@ export default function Home() {
         </pre>
       )}
       <p style={{ marginTop: 24, color: "#666", fontSize: 14 }}>
-        Then open your project in <b>Arize AX</b> → see the trace: agent reasoning
-        → tool call → <code>x402.payment</code> (with cost) → answer.
+        Then open your project in <b>Arize AX</b> → see the trace: agent
+        reasoning → tool call → <code>x402.payment</code> (with cost) → answer.
       </p>
     </main>
   );

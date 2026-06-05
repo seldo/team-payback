@@ -1,4 +1,5 @@
 node_modules
+# .agents/ is intentionally committed — skills are bundled so collaborators don't need to run `npx skills add`
 .next
 out
 .env
