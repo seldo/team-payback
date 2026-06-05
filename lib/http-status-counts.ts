@@ -55,9 +55,62 @@ const SPAN_COLUMNS = [
   "attributes.output.value",
 ];
 
+// Spans can be ingested slightly before the project record's createdAt
+// (ingestion-vs-creation skew), so back the window start off by this much to
+// avoid dropping the earliest spans. Cheap: the query is paginated either way.
+const TIME_RANGE_BUFFER_MS = 24 * 60 * 60 * 1000; // 1 day
+
+/**
+ * The project's data window, fetched dynamically (no hardcoded dates).
+ * `start` is createdAt minus a skew buffer (earliest data); `end` is now
+ * (always >= the latest trace). The schema has no "latest span" field, and
+ * `Model.timeRange` does not exist, so this is the usable dynamic window.
+ */
+async function getProjectTimeRange(
+  apiKey: string,
+  spaceId: string,
+  projectId: string
+): Promise<{ start: Date; end: Date }> {
+  const query = `{
+    node(id: ${JSON.stringify(projectId)}) {
+      ... on Model { createdAt }
+    }
+  }`;
+
+  const res = await fetch(ARIZE_GRAPHQL_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "space-id": spaceId,
+    },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `Arize GraphQL request failed: ${res.status} ${res.statusText}`
+    );
+  }
+
+  const json: any = await res.json();
+  if (json.errors?.length) {
+    throw new Error(`Arize GraphQL error: ${JSON.stringify(json.errors)}`);
+  }
+
+  const createdAt = json?.data?.node?.createdAt;
+  if (!createdAt) throw new Error("Project createdAt not found");
+
+  return {
+    start: new Date(new Date(createdAt).getTime() - TIME_RANGE_BUFFER_MS),
+    end: new Date(),
+  };
+}
+
 /**
  * Page through span records that carry `attributes.payment.http_status` and map
  * each into a Span. Columns are matched by name (not position) for robustness.
+ * Time range is resolved dynamically from the project's data window.
  */
 async function fetchHttpStatusSpans(days?: number): Promise<Span[]> {
   const apiKey = process.env.ARIZE_API_KEY;
@@ -66,12 +119,16 @@ async function fetchHttpStatusSpans(days?: number): Promise<Span[]> {
 
   if (!apiKey) throw new Error("ARIZE_API_KEY is not set");
 
-  // Use the project's actual data range. With `days`, look back that many days
-  // from the pinned end; without it, span the full known data window.
-  const end = new Date("2026-06-05T20:57:15.600Z");
+  // Resolve the project's actual data window dynamically. With `days`, look back
+  // that many days from the latest data; without it, span the full window.
+  const { start: projectStart, end } = await getProjectTimeRange(
+    apiKey,
+    spaceId,
+    projectId
+  );
   const start = days
     ? new Date(end.getTime() - days * 24 * 60 * 60 * 1000)
-    : new Date("2026-05-29T20:00:00.000Z");
+    : projectStart;
   const dataset =
     `startTime: ${JSON.stringify(start.toISOString())}, ` +
     `endTime: ${JSON.stringify(end.toISOString())}, ` +
