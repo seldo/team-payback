@@ -1,6 +1,7 @@
 import "./globals.css";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const metadata = {
   title: "Team Payback — Agent Dashboard",
@@ -21,6 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
         {children}
       </body>
     </html>
