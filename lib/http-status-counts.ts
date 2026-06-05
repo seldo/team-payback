@@ -72,7 +72,9 @@ async function getHttpStatusTally(
       );
     }
 
-    const json = await res.json();
+    // Explicit annotation breaks a TS7022 circular-inference cycle in the
+    // do/while pager (afterArg -> after -> conn -> json -> res -> query).
+    const json: any = await res.json();
     if (json.errors?.length) {
       throw new Error(`Arize GraphQL error: ${JSON.stringify(json.errors)}`);
     }
@@ -102,4 +104,141 @@ export async function getHttpSuccessCount(days = 7): Promise<number> {
 /** Number of failed requests (HTTP status >= 400) in the last `days`. */
 export async function getHttpFailureCount(days = 7): Promise<number> {
   return (await getHttpStatusTally(days)).failure;
+}
+
+export interface Span {
+  spanId: string;
+  name: string;
+  startTime: string;
+  latencyMs: number;
+  statusCode: string;
+  httpStatus: number;
+  inputValue?: string;
+  outputValue?: string;
+}
+
+const SPAN_COLUMNS = [
+  "attributes.payment.http_status",
+  "attributes.input.value",
+  "attributes.output.value",
+];
+
+/**
+ * Page through span records that carry `attributes.payment.http_status` and map
+ * each into a Span. Columns are matched by name (not position) for robustness.
+ */
+async function fetchHttpStatusSpans(days: number): Promise<Span[]> {
+  const apiKey = process.env.ARIZE_API_KEY;
+  const spaceId = process.env.ARIZE_SPACE_ID ?? "U3BhY2U6MzEwMjI6NERxbA==";
+  const projectId = process.env.ARIZE_PROJECT_ID ?? "TW9kZWw6ODIyMzU4NzU1OTpNdkxw";
+
+  if (!apiKey) throw new Error("ARIZE_API_KEY is not set");
+
+  const end = new Date();
+  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  const dataset =
+    `startTime: ${JSON.stringify(start.toISOString())}, ` +
+    `endTime: ${JSON.stringify(end.toISOString())}, ` +
+    `environmentName: tracing, externalModelVersionIds: [], externalBatchIds: []`;
+
+  const spans: Span[] = [];
+  let after: string | null = null;
+
+  do {
+    const afterArg = after ? `, after: ${JSON.stringify(after)}` : "";
+    const query = `{
+      node(id: ${JSON.stringify(projectId)}) {
+        ... on Model {
+          spanRecordsPublic(
+            first: ${PAGE_SIZE}${afterArg}
+            dataset: { ${dataset} }
+            columnNames: ${JSON.stringify(SPAN_COLUMNS)}
+          ) {
+            pageInfo { hasNextPage endCursor }
+            edges {
+              node {
+                spanId
+                name
+                startTime
+                latencyMs
+                statusCode
+                columns {
+                  name
+                  value {
+                    ... on NumericDimensionValue { num: value }
+                    ... on CategoricalDimensionValue { cat: value }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }`;
+
+    const res = await fetch(ARIZE_GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "space-id": spaceId,
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Arize GraphQL request failed: ${res.status} ${res.statusText}`
+      );
+    }
+
+    // Explicit annotation breaks a TS7022 circular-inference cycle in the
+    // do/while pager (afterArg -> after -> conn -> json -> res -> query).
+    const json: any = await res.json();
+    if (json.errors?.length) {
+      throw new Error(`Arize GraphQL error: ${JSON.stringify(json.errors)}`);
+    }
+
+    const conn = json?.data?.node?.spanRecordsPublic;
+    const edges: Array<{
+      node: {
+        spanId: string;
+        name: string;
+        startTime: string;
+        latencyMs: number;
+        statusCode: string;
+        columns: Array<{ name: string; value: { num?: number; cat?: string } | null }>;
+      };
+    }> = conn?.edges ?? [];
+
+    for (const { node } of edges) {
+      const col = (n: string) => node.columns.find((c) => c.name === n)?.value;
+      const httpStatus = col("attributes.payment.http_status")?.num;
+      if (typeof httpStatus !== "number") continue; // only x402 payment spans carry it
+      spans.push({
+        spanId: node.spanId,
+        name: node.name,
+        startTime: node.startTime,
+        latencyMs: node.latencyMs,
+        statusCode: node.statusCode,
+        httpStatus,
+        inputValue: col("attributes.input.value")?.cat || undefined,
+        outputValue: col("attributes.output.value")?.cat || undefined,
+      });
+    }
+
+    after = conn?.pageInfo?.hasNextPage ? conn.pageInfo.endCursor : null;
+  } while (after);
+
+  return spans;
+}
+
+/** Full span records for successful requests (HTTP status < 400) in the last `days`. */
+export async function getSuccessfulSpans(days = 7): Promise<Span[]> {
+  return (await fetchHttpStatusSpans(days)).filter((s) => s.httpStatus < 400);
+}
+
+/** Full span records for failed requests (HTTP status >= 400) in the last `days`. */
+export async function getFailedSpans(days = 7): Promise<Span[]> {
+  return (await fetchHttpStatusSpans(days)).filter((s) => s.httpStatus >= 400);
 }
