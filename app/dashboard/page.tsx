@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { ThemeToggle } from "@/components/dashboard/theme-toggle";
 import { cn } from "@/lib/utils";
 
 interface Span {
@@ -134,6 +135,7 @@ export default function DashboardPage() {
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
+          <ThemeToggle />
         </div>
       </div>
 
