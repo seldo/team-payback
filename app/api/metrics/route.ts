@@ -1,20 +1,29 @@
 // Dashboard metrics: success vs failure of payment requests, derived from
 // Arize AX spans (attributes.payment.http_status). One pass over the spans.
-import { getHttpStatusSpans, type Span } from "@/lib/http-status-counts";
+import {
+  getHttpStatusSpans,
+  tallyHttpStatusByTrace,
+  type Span,
+} from "@/lib/http-status-counts";
 
 export const dynamic = "force-dynamic"; // always reflect the latest traces
 
 export async function GET(req: Request) {
-  const daysParam = Number(new URL(req.url).searchParams.get("days"));
-  // Valid ?days=N → that look-back window; otherwise undefined → full data range.
+  const url = new URL(req.url);
+  const daysParam = Number(url.searchParams.get("days"));
+  const startTime = url.searchParams.get("startTime") ?? undefined;
+  const endTime = url.searchParams.get("endTime") ?? undefined;
+  // Valid ?days=N -> that look-back window; otherwise use the full project range.
   const days =
     Number.isFinite(daysParam) && daysParam > 0 ? daysParam : undefined;
 
   try {
-    const spans = await getHttpStatusSpans(days);
-    const successful = spans.filter((s) => s.httpStatus < 400);
-    const failed = spans.filter((s) => s.httpStatus >= 400);
-    const total = spans.length;
+    const spans =
+      startTime || endTime
+        ? await getHttpStatusSpans({ days, startTime, endTime })
+        : await getHttpStatusSpans(days);
+    const { success, failure } = tallyHttpStatusByTrace(spans);
+    const total = success + failure;
 
     const recent = [...spans]
       .sort((a, b) => +new Date(b.startTime) - +new Date(a.startTime))
@@ -27,9 +36,9 @@ export async function GET(req: Request) {
     return Response.json({
       days,
       total,
-      success: successful.length,
-      failure: failed.length,
-      successRate: total ? successful.length / total : 0,
+      success,
+      failure,
+      successRate: total ? success / total : 0,
       avgLatencyMs,
       recent: recent as Span[],
     });

@@ -37,6 +37,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { cn } from "@/lib/utils";
 
 interface Span {
+  traceId: string;
   spanId: string;
   name: string;
   startTime: string;
@@ -46,7 +47,7 @@ interface Span {
 }
 
 interface Metrics {
-  days: number;
+  days?: number;
   total: number;
   success: number;
   failure: number;
