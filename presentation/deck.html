@@ -209,11 +209,12 @@
 
   /* control flow diagram slide */
   #s5 .canvas{background:radial-gradient(120% 120% at 50% 18%,#0f2c44 0%,var(--navy) 60%);}
-  .flowwrap{position:absolute;inset:0;padding:30px 60px 70px;display:flex;flex-direction:column;}
-  .flowwrap .kicker{margin-bottom:6px!important;}
-  .flowwrap h2{font-size:34px;margin-bottom:4px;}
-  .flowwrap .lead{font-size:16px;margin-bottom:6px;max-width:880px;}
-  .lanes{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;}
+  .flowwrap{position:absolute;inset:0;padding:0;}
+  .flowwrap .flowhead{position:absolute;left:60px;top:40px;width:300px;z-index:3;}
+  .flowwrap .kicker{margin-bottom:8px!important;}
+  .flowwrap h2{font-size:36px;margin-bottom:12px;}
+  .flowwrap .lead{font-size:17px;line-height:1.5;max-width:300px;}
+  .lanes{position:absolute;inset:0;padding:24px 50px 64px;display:flex;align-items:center;justify-content:center;}
   .lanes svg{height:100%;width:auto;max-width:100%;}
 
   /* results */
@@ -397,9 +398,11 @@
   <section class="slide" id="s5">
     <div class="canvas">
       <div class="flowwrap">
-        <div class="kicker" style="margin-bottom:10px;"><span class="dot"></span>How it works</div>
-        <h2>Control flow</h2>
-        <p class="lead">A pay-per-request handshake where quality is disclosed up front and money is returned automatically when it slips.</p>
+        <div class="flowhead">
+          <div class="kicker"><span class="dot"></span>How it works</div>
+          <h2>Control flow</h2>
+          <p class="lead">A pay-per-request handshake where quality is disclosed up front and money is returned automatically when it slips.</p>
+        </div>
         <div class="lanes" id="lanes"></div>
       </div>
       <div class="pageno">05</div>
@@ -625,7 +628,7 @@
 
 <script>
 const lanesSVG = `
-<svg viewBox="0 0 680 690" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+<svg viewBox="0 0 680 740" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M2 1L8 5L2 9" fill="none" stroke="#5a7185" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -641,8 +644,8 @@ const lanesSVG = `
   <!-- lane headers + guides -->
   <text x="170" y="22" text-anchor="middle" fill="#3FB6C8" font-size="17" font-weight="700" letter-spacing="2">SERVER</text>
   <text x="510" y="22" text-anchor="middle" fill="#15C39A" font-size="17" font-weight="700" letter-spacing="2">CLIENT</text>
-  <line x1="170" y1="34" x2="170" y2="688" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
-  <line x1="510" y1="34" x2="510" y2="688" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
+  <line x1="170" y1="34" x2="170" y2="730" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
+  <line x1="510" y1="34" x2="510" y2="730" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
 
   <!-- 1 client: request -->
   <g>
@@ -688,42 +691,43 @@ const lanesSVG = `
     <text x="575" y="397" text-anchor="middle" fill="#F0635E" font-size="15" font-weight="600">Bail out ✕</text>
   </g>
 
-  <!-- branch: YES -> send payment (routed left, clear of bail box) -->
-  <text x="455" y="358" text-anchor="middle" fill="#15C39A" font-size="12.5" font-weight="700">Yes</text>
-  <path d="M400 312 L430 312 L430 458 L466 458" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+  <!-- branch: YES -> send payment (left out, down, back right; clears Judge box) -->
+  <text x="372" y="330" text-anchor="middle" fill="#15C39A" font-size="12.5" font-weight="700">Yes</text>
+  <path d="M400 312 L370 312 L370 446 L466 446" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
   <g>
-    <rect x="470" y="436" width="150" height="44" rx="11" fill="#13283C" stroke="rgba(21,195,154,.5)"/>
-    <text x="545" y="463" text-anchor="middle" fill="#15C39A" font-size="15" font-weight="600">5 · Send payment</text>
+    <rect x="470" y="424" width="150" height="44" rx="11" fill="#13283C" stroke="rgba(21,195,154,.5)"/>
+    <text x="545" y="451" text-anchor="middle" fill="#15C39A" font-size="15" font-weight="600">5 · Send payment</text>
   </g>
-  <line x1="466" y1="458" x2="294" y2="458" class="arr-svg" marker-end="url(#ah)"/>
+  <!-- payment -> deliver (lower row, clear of green vertical at x=430) -->
+  <path d="M470 462 L400 462 L400 506 L294 506" stroke="#5a7185" stroke-width="2" fill="none" marker-end="url(#ah)"/>
 
   <!-- server: deliver content -->
   <g>
-    <rect x="70" y="436" width="220" height="44" rx="11" fill="#173249" stroke="rgba(21,195,154,.5)"/>
-    <text x="180" y="463" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Deliver content</text>
+    <rect x="70" y="484" width="220" height="44" rx="11" fill="#173249" stroke="rgba(21,195,154,.5)"/>
+    <text x="180" y="511" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Deliver content</text>
   </g>
-  <line x1="290" y1="510" x2="446" y2="510" class="arr-svg" marker-end="url(#ah)"/>
+  <line x1="290" y1="556" x2="446" y2="556" class="arr-svg" marker-end="url(#ah)"/>
   <g>
-    <rect x="450" y="488" width="160" height="44" rx="11" fill="#13283C" stroke="rgba(255,255,255,.12)"/>
-    <text x="530" y="515" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Receive content</text>
+    <rect x="450" y="534" width="160" height="44" rx="11" fill="#13283C" stroke="rgba(255,255,255,.12)"/>
+    <text x="530" y="561" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Receive content</text>
   </g>
 
   <!-- 6 server: async self-eval -->
-  <line x1="180" y1="480" x2="180" y2="540" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)" stroke-dasharray="5 4"/>
-  <text x="210" y="514" fill="#8FA8BC" font-size="11.5" font-style="italic">async</text>
+  <line x1="180" y1="528" x2="180" y2="594" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)" stroke-dasharray="5 4"/>
+  <text x="210" y="565" fill="#8FA8BC" font-size="11.5" font-style="italic">async</text>
   <g>
-    <rect x="70" y="540" width="220" height="50" rx="11" fill="#173249" stroke="rgba(124,93,219,.55)"/>
-    <text x="180" y="562" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">6 · Evaluate responses</text>
-    <text x="180" y="580" text-anchor="middle" fill="#8FA8BC" font-size="12">domain-specific quality scoring</text>
+    <rect x="70" y="594" width="220" height="50" rx="11" fill="#173249" stroke="rgba(124,93,219,.55)"/>
+    <text x="180" y="616" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">6 · Evaluate responses</text>
+    <text x="180" y="634" text-anchor="middle" fill="#8FA8BC" font-size="12">domain-specific quality scoring</text>
   </g>
 
   <!-- refund branch -->
-  <line x1="180" y1="590" x2="180" y2="624" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)"/>
+  <line x1="180" y1="644" x2="180" y2="678" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)"/>
   <g>
-    <rect x="70" y="624" width="220" height="44" rx="11" fill="#173249" stroke="rgba(240,99,94,.5)"/>
-    <text x="180" y="651" text-anchor="middle" fill="#F0635E" font-size="15" font-weight="600">↩ Issue refund if low</text>
+    <rect x="70" y="678" width="220" height="44" rx="11" fill="#173249" stroke="rgba(240,99,94,.5)"/>
+    <text x="180" y="705" text-anchor="middle" fill="#F0635E" font-size="15" font-weight="600">↩ Issue refund if low</text>
   </g>
-  <path d="M294 646 L510 646 L510 534" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)" stroke-dasharray="5 4"/>
+  <path d="M294 700 L510 700 L510 580" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)" stroke-dasharray="5 4"/>
 </svg>`;
 document.getElementById('lanes').innerHTML = lanesSVG;
 
