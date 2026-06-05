@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  RotateCcw,
   TrendingUp,
   XCircle,
 } from "lucide-react";
@@ -54,6 +55,10 @@ interface Metrics {
   failure: number;
   successRate: number;
   avgLatencyMs: number;
+  refundSpans: number;
+  refundTraces: number;
+  refundStartTime: string;
+  refundEndTime: string;
   recent: Span[];
 }
 
@@ -148,7 +153,7 @@ export default function DashboardPage() {
       )}
 
       {/* KPI cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Total Requests"
           value={data?.total ?? 0}
@@ -172,6 +177,18 @@ export default function DashboardPage() {
           accent="text-red-500"
           loading={loading}
           hint="HTTP status ≥ 400"
+        />
+        <StatCard
+          title="Refund Traces"
+          value={data?.refundTraces ?? 0}
+          icon={RotateCcw}
+          accent="text-sky-500"
+          loading={loading}
+          hint={
+            data
+              ? `${data.refundSpans} refund spans · last 24h`
+              : "Last 24h"
+          }
         />
         <StatCard
           title="Success Rate"

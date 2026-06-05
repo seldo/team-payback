@@ -5,6 +5,7 @@ import {
   tallyHttpStatusByTrace,
   type Span,
 } from "@/lib/http-status-counts";
+import { getRefundTraceSummary } from "@/lib/refund-traces";
 
 export const dynamic = "force-dynamic"; // always reflect the latest traces
 
@@ -18,10 +19,14 @@ export async function GET(req: Request) {
     Number.isFinite(daysParam) && daysParam > 0 ? daysParam : undefined;
 
   try {
-    const spans =
+    const spansPromise =
       startTime || endTime
-        ? await getHttpStatusSpans({ days, startTime, endTime })
-        : await getHttpStatusSpans(days);
+        ? getHttpStatusSpans({ days, startTime, endTime })
+        : getHttpStatusSpans(days);
+    const [spans, refundSummary] = await Promise.all([
+      spansPromise,
+      getRefundTraceSummary(),
+    ]);
     const { success, failure } = tallyHttpStatusByTrace(spans);
     const total = success + failure;
 
@@ -40,6 +45,10 @@ export async function GET(req: Request) {
       failure,
       successRate: total ? success / total : 0,
       avgLatencyMs,
+      refundSpans: refundSummary.refundSpans,
+      refundTraces: refundSummary.refundTraces,
+      refundStartTime: refundSummary.startTime,
+      refundEndTime: refundSummary.endTime,
       recent: recent as Span[],
     });
   } catch (e) {
