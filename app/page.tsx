@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import AsciiTrail from "./ascii-trail";
+import ReactMarkdown from "react-markdown";
 
 export default function Home() {
   const [prompt, setPrompt] = useState(
@@ -133,7 +134,9 @@ export default function Home() {
         {out && (
           <Card className="mt-6">
             <CardContent className="py-4">
-              <pre className="whitespace-pre-wrap font-mono text-sm">{out}</pre>
+              <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                <ReactMarkdown>{out}</ReactMarkdown>
+              </div>
             </CardContent>
           </Card>
         )}
