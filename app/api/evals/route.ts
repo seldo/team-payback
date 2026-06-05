@@ -61,7 +61,11 @@ export async function GET(req: Request) {
   });
 
   if (!res.ok) {
-    return Response.json({ error: "Arize GraphQL request failed" }, { status: res.status });
+    const body = await res.text();
+    return Response.json(
+      { error: "Arize GraphQL request failed", arizeStatus: res.status, arizeBody: body },
+      { status: res.status }
+    );
   }
 
   const data = await res.json();
