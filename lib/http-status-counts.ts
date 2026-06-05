@@ -16,7 +16,7 @@ const PAGE_SIZE = 50; // Arize caps spanRecordsPublic page size at 50.
 
 /** Tally deduped http_status spans into {success, failure}. */
 async function getHttpStatusTally(
-  days: number
+  days?: number
 ): Promise<{ success: number; failure: number }> {
   const spans = await fetchHttpStatusSpans(days);
   let success = 0;
@@ -28,13 +28,13 @@ async function getHttpStatusTally(
   return { success, failure };
 }
 
-/** Number of successful requests (HTTP status < 400) in the last `days`. */
-export async function getHttpSuccessCount(days = 7): Promise<number> {
+/** Number of successful requests (HTTP status < 400). Omit `days` for the full data range. */
+export async function getHttpSuccessCount(days?: number): Promise<number> {
   return (await getHttpStatusTally(days)).success;
 }
 
-/** Number of failed requests (HTTP status >= 400) in the last `days`. */
-export async function getHttpFailureCount(days = 7): Promise<number> {
+/** Number of failed requests (HTTP status >= 400). Omit `days` for the full data range. */
+export async function getHttpFailureCount(days?: number): Promise<number> {
   return (await getHttpStatusTally(days)).failure;
 }
 
@@ -59,15 +59,19 @@ const SPAN_COLUMNS = [
  * Page through span records that carry `attributes.payment.http_status` and map
  * each into a Span. Columns are matched by name (not position) for robustness.
  */
-async function fetchHttpStatusSpans(days: number): Promise<Span[]> {
+async function fetchHttpStatusSpans(days?: number): Promise<Span[]> {
   const apiKey = process.env.ARIZE_API_KEY;
   const spaceId = process.env.ARIZE_SPACE_ID ?? "U3BhY2U6MzEwMjI6NERxbA==";
   const projectId = process.env.ARIZE_PROJECT_ID ?? "TW9kZWw6ODIyMzU4NzU1OTpNdkxw";
 
   if (!apiKey) throw new Error("ARIZE_API_KEY is not set");
 
-  const end = new Date();
-  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+  // Use the project's actual data range. With `days`, look back that many days
+  // from the pinned end; without it, span the full known data window.
+  const end = new Date("2026-06-05T20:57:15.600Z");
+  const start = days
+    ? new Date(end.getTime() - days * 24 * 60 * 60 * 1000)
+    : new Date("2026-05-29T20:00:00.000Z");
   const dataset =
     `startTime: ${JSON.stringify(start.toISOString())}, ` +
     `endTime: ${JSON.stringify(end.toISOString())}, ` +
@@ -168,17 +172,17 @@ async function fetchHttpStatusSpans(days: number): Promise<Span[]> {
   return spans;
 }
 
-/** All spans carrying an http_status in the last `days` (success + failure), one pass. */
-export async function getHttpStatusSpans(days = 7): Promise<Span[]> {
+/** All spans carrying an http_status (success + failure), one pass. Omit `days` for the full data range. */
+export async function getHttpStatusSpans(days?: number): Promise<Span[]> {
   return fetchHttpStatusSpans(days);
 }
 
-/** Full span records for successful requests (HTTP status < 400) in the last `days`. */
-export async function getSuccessfulSpans(days = 7): Promise<Span[]> {
+/** Full span records for successful requests (HTTP status < 400). Omit `days` for the full data range. */
+export async function getSuccessfulSpans(days?: number): Promise<Span[]> {
   return (await fetchHttpStatusSpans(days)).filter((s) => s.httpStatus < 400);
 }
 
-/** Full span records for failed requests (HTTP status >= 400) in the last `days`. */
-export async function getFailedSpans(days = 7): Promise<Span[]> {
+/** Full span records for failed requests (HTTP status >= 400). Omit `days` for the full data range. */
+export async function getFailedSpans(days?: number): Promise<Span[]> {
   return (await fetchHttpStatusSpans(days)).filter((s) => s.httpStatus >= 400);
 }

@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic"; // always reflect the latest traces
 
 export async function GET(req: Request) {
   const daysParam = Number(new URL(req.url).searchParams.get("days"));
-  const days = Number.isFinite(daysParam) && daysParam > 0 ? daysParam : 7;
+  // Valid ?days=N → that look-back window; otherwise undefined → full data range.
+  const days =
+    Number.isFinite(daysParam) && daysParam > 0 ? daysParam : undefined;
 
   try {
     const spans = await getHttpStatusSpans(days);
