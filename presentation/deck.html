@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Payback — API Quality &amp; Automatic Recovery</title>
+<style>
+  :root{
+    --navy:#0B1622;
+    --navy2:#0F2233;
+    --panel:#13283C;
+    --panel2:#173249;
+    --emerald:#15C39A;
+    --emerald-d:#0E9B7A;
+    --teal:#3FB6C8;
+    --ice:#CADCFC;
+    --ink:#EAF2F7;
+    --muted:#8FA8BC;
+    --muted2:#647d92;
+    --line:rgba(255,255,255,0.09);
+    --red:#F0635E;
+    --amber:#F2B544;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:#05090e;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    overflow:hidden;
+  }
+  .stage{
+    position:fixed;inset:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .slide{
+    position:absolute;
+    width:100vw;height:100vh;
+    display:none;
+    opacity:0;
+    transition:opacity .45s ease;
+  }
+  .slide.active{display:block;opacity:1;}
+  .canvas{
+    position:absolute;top:50%;left:50%;
+    width:1280px;height:720px;
+    transform:translate(-50%,-50%) scale(var(--scale,1));
+    transform-origin:center center;
+    background:var(--navy);
+    overflow:hidden;
+  }
+  /* shared bits */
+  .eyebrow{
+    color:var(--emerald);
+    font-size:21px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  }
+  .kicker{
+    display:inline-flex;align-items:center;gap:10px;
+    color:var(--emerald);font-size:15px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  }
+  .kicker .dot{width:9px;height:9px;border-radius:50%;background:var(--emerald);}
+  h1{font-size:104px;line-height:.98;font-weight:800;letter-spacing:-.02em;}
+  h2{font-size:50px;line-height:1.05;font-weight:800;letter-spacing:-.015em;}
+  .lead{color:var(--muted);font-size:22px;line-height:1.5;font-weight:400;}
+  .pad{position:absolute;inset:0;padding:84px 92px;}
+
+  /* background motifs */
+  .grid-bg{
+    position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(63,182,200,0.05) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(63,182,200,0.05) 1px,transparent 1px);
+    background-size:46px 46px;
+  }
+  .glow{
+    position:absolute;border-radius:50%;
+    filter:blur(80px);opacity:.5;pointer-events:none;
+  }
+
+  /* number tag */
+  .pageno{
+    position:absolute;right:46px;bottom:34px;
+    color:var(--muted2);font-size:14px;letter-spacing:.18em;font-weight:600;
+  }
+  .brandfoot{
+    position:absolute;left:92px;bottom:34px;
+    color:var(--muted2);font-size:14px;letter-spacing:.14em;font-weight:600;text-transform:uppercase;
+  }
+
+  /* ---------- Slide 1 : title ---------- */
+  #s1 .canvas{background:radial-gradient(120% 120% at 75% 30%,#10304a 0%,var(--navy) 55%);}
+  #s1 .left{position:absolute;left:92px;top:0;bottom:0;width:560px;display:flex;flex-direction:column;justify-content:center;z-index:2;}
+  #s1 h1{margin:14px 0 26px;}
+  #s1 .bar{width:64px;height:5px;background:var(--emerald);margin-top:30px;border-radius:3px;}
+  #s1 .art{
+    position:absolute;right:0;top:0;bottom:0;width:560px;
+    background:linear-gradient(135deg,#0c2236,#0a3247);
+    overflow:hidden;border-left:1px solid var(--line);
+  }
+  #s1 .codeline{position:absolute;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:14px;color:rgba(63,182,200,.35);white-space:nowrap;}
+  #s1 .refund-badge{
+    position:absolute;right:60px;top:120px;
+    display:flex;align-items:center;gap:14px;
+  }
+  #s1 .circ{
+    width:120px;height:120px;border-radius:50%;
+    border:3px solid var(--emerald);
+    display:flex;align-items:center;justify-content:center;
+    font-size:46px;color:var(--emerald);font-weight:700;
+    box-shadow:0 0 40px rgba(21,195,154,.4);
+  }
+  #s1 .arrows{position:absolute;right:200px;top:300px;display:flex;flex-direction:column;gap:8px;}
+  #s1 .arrows span{font-size:54px;color:var(--emerald);line-height:.7;}
+  #s1 .stamp{
+    position:absolute;right:48px;bottom:120px;
+    color:var(--emerald);font-family:"SF Mono",Menlo,monospace;
+    font-size:20px;font-weight:700;letter-spacing:.1em;
+    border:2px solid rgba(21,195,154,.5);padding:8px 16px;border-radius:8px;
+    transform:rotate(-6deg);
+  }
+  #s1 .funds{position:absolute;right:60px;top:60px;font-family:"SF Mono",Menlo,monospace;color:var(--ice);font-size:16px;}
+
+  /* ---------- generic content layout ---------- */
+  .head{margin-bottom:38px;}
+  .head h2{margin-top:14px;max-width:1000px;}
+
+  /* problem two-col */
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:6px;}
+  .qcard{
+    background:linear-gradient(180deg,var(--panel),var(--navy2));
+    border:1px solid var(--line);border-radius:18px;padding:30px 30px 28px;
+    position:relative;overflow:hidden;
+  }
+  .qcard .role{font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:14px;}
+  .qcard.cust .role{color:var(--emerald);}
+  .qcard .q{font-size:23px;line-height:1.35;font-weight:600;color:var(--ink);}
+  .qcard .num{position:absolute;right:22px;top:14px;font-size:64px;font-weight:800;color:rgba(255,255,255,.05);}
+  .premise{
+    margin-top:26px;background:rgba(21,195,154,.08);
+    border:1px solid rgba(21,195,154,.25);border-radius:14px;
+    padding:20px 26px;font-size:20px;color:var(--ice);
+    display:flex;align-items:center;gap:16px;
+  }
+  .premise b{color:var(--emerald);}
+
+  /* solution list */
+  .sol-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 30px;margin-top:8px;}
+  .sol{display:flex;gap:18px;align-items:flex-start;padding:6px 0;}
+  .sol .ico{
+    flex:0 0 46px;width:46px;height:46px;border-radius:12px;
+    background:rgba(21,195,154,.12);border:1px solid rgba(21,195,154,.3);
+    display:flex;align-items:center;justify-content:center;color:var(--emerald);
+    font-size:22px;
+  }
+  .sol .txt{font-size:20px;line-height:1.35;padding-top:8px;color:var(--ink);}
+  .bigtrust{
+    grid-column:1/3;margin-top:14px;
+    background:linear-gradient(90deg,rgba(21,195,154,.16),rgba(63,182,200,.04));
+    border:1px solid rgba(21,195,154,.3);border-radius:16px;padding:24px 30px;
+    font-size:26px;font-weight:700;color:#fff;display:flex;align-items:center;gap:16px;
+  }
+  .bigtrust .eq{color:var(--emerald);font-size:30px;}
+
+  /* step slides */
+  .step-wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:50px;height:100%;align-items:center;}
+  .step-left{padding-left:4px;}
+  .stepno{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:"SF Mono",Menlo,monospace;
+    color:var(--emerald);font-size:16px;font-weight:700;letter-spacing:.12em;
+    border:1px solid rgba(21,195,154,.4);border-radius:30px;padding:7px 18px;margin-bottom:22px;
+  }
+  .step-left h2{font-size:46px;margin-bottom:28px;}
+  .step-list{list-style:none;display:flex;flex-direction:column;gap:14px;}
+  .step-list li{
+    position:relative;padding-left:30px;font-size:21px;line-height:1.4;color:var(--ink);
+  }
+  .step-list li::before{
+    content:"";position:absolute;left:0;top:11px;width:9px;height:9px;border-radius:2px;
+    background:var(--emerald);transform:rotate(45deg);
+  }
+  .step-list li.sub{padding-left:52px;font-size:18px;color:var(--muted);}
+  .step-list li.sub::before{left:30px;top:10px;width:6px;height:6px;background:var(--teal);}
+  .step-list li.bail{color:var(--red);}
+  .step-list li.bail::before{background:var(--red);}
+  .step-list li.go{color:var(--emerald);font-weight:600;}
+
+  /* code / json card on the right of step slides */
+  .codecard{
+    background:#091824;border:1px solid var(--line);border-radius:16px;
+    overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.4);
+  }
+  .codebar{display:flex;align-items:center;gap:7px;padding:14px 18px;background:#0b1f2e;border-bottom:1px solid var(--line);}
+  .codebar i{width:11px;height:11px;border-radius:50%;display:block;}
+  .codebar .t{margin-left:12px;color:var(--muted);font-size:13px;font-family:"SF Mono",Menlo,monospace;}
+  .code{padding:22px 24px;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:16.5px;line-height:1.7;}
+  .code .k{color:var(--teal);}
+  .code .s{color:var(--emerald);}
+  .code .n{color:var(--amber);}
+  .code .c{color:var(--muted2);}
+  .code .p{color:var(--ice);}
+  .code .err{color:var(--red);}
+
+  /* section divider slides (Control flow / Demo) */
+  .divider{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;}
+  .divider .kicker{margin-bottom:24px;}
+  .divider h2{font-size:88px;}
+  .divider .sub{color:var(--muted);font-size:24px;margin-top:22px;}
+
+  /* control flow diagram slide */
+  #s5 .canvas{background:radial-gradient(120% 120% at 50% 18%,#0f2c44 0%,var(--navy) 60%);}
+  .flowwrap{position:absolute;inset:0;padding:0;}
+  .flowwrap .flowhead{position:absolute;left:60px;top:40px;width:300px;z-index:3;}
+  .flowwrap .kicker{margin-bottom:8px!important;}
+  .flowwrap h2{font-size:36px;margin-bottom:12px;}
+  .flowwrap .lead{font-size:17px;line-height:1.5;max-width:300px;}
+  .lanes{position:absolute;inset:0;padding:24px 50px 64px;display:flex;align-items:center;justify-content:center;}
+  .lanes svg{height:100%;width:auto;max-width:100%;}
+
+  /* results */
+  .res-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;margin-top:20px;}
+  .rescard{
+    background:linear-gradient(180deg,var(--panel),var(--navy2));
+    border:1px solid var(--line);border-radius:20px;padding:36px 30px;
+    display:flex;flex-direction:column;gap:16px;min-height:300px;
+  }
+  .rescard .ico{
+    width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px;
+    background:rgba(21,195,154,.12);border:1px solid rgba(21,195,154,.3);color:var(--emerald);
+  }
+  .rescard h3{font-size:27px;font-weight:700;}
+  .rescard p{color:var(--muted);font-size:18px;line-height:1.45;}
+  .res-foot{
+    margin-top:36px;text-align:center;font-size:30px;font-weight:700;color:#fff;
+  }
+  .res-foot .em{color:var(--emerald);}
+
+  /* members */
+  #s2 .head{margin-bottom:34px;}
+  .mem-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px;max-width:1000px;}
+  .mem{
+    display:flex;align-items:center;gap:20px;
+    background:linear-gradient(180deg,var(--panel),var(--navy2));
+    border:1px solid var(--line);border-radius:16px;padding:20px 24px;
+  }
+  .mem .av{
+    flex:0 0 56px;width:56px;height:56px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:21px;font-weight:700;color:var(--navy);
+    background:linear-gradient(135deg,var(--emerald),var(--teal));
+  }
+  .mem .nm{font-size:23px;font-weight:600;}
+  .mem .co{font-size:15px;color:var(--muted);letter-spacing:.04em;margin-top:2px;}
+  .mem .co.arize{color:var(--emerald);}
+  .mem .co.coinbase{color:var(--teal);}
+
+  /* nav */
+  .nav{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:18px;z-index:50;
+    background:rgba(10,20,30,.7);backdrop-filter:blur(10px);
+    border:1px solid var(--line);border-radius:40px;padding:9px 18px;
+  }
+  .nav button{
+    background:none;border:none;color:var(--ink);cursor:pointer;
+    font-size:20px;width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;transition:background .2s;
+  }
+  .nav button:hover{background:rgba(255,255,255,.1);}
+  .nav .count{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;letter-spacing:.08em;min-width:54px;text-align:center;}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--emerald);z-index:60;transition:width .35s ease;}
+  .hint{position:fixed;bottom:26px;right:26px;color:var(--muted2);font-size:13px;z-index:50;letter-spacing:.04em;}
+
+  /* SVG diagram helpers */
+  .arr-svg{stroke:#5a7185;stroke-width:2;fill:none;}
+  .node-r{rx:11;}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="stage">
+
+  <!-- SLIDE 1 -->
+  <section class="slide" id="s1">
+    <div class="canvas">
+      <div class="left">
+        <div class="eyebrow">API Quality &amp; Automatic Recovery</div>
+        <h1>Team<br>Payback</h1>
+        <p class="lead">Ensuring service reputation through public disclosure of evaluation standards and automatic refunds for low-quality output.</p>
+        <div class="bar"></div>
+      </div>
+      <div class="art">
+        <div class="codeline" style="top:40px;left:30px;">GET /api/v3/refund {</div>
+        <div class="codeline" style="top:70px;left:50px;">"status": "REFUNDED",</div>
+        <div class="codeline" style="top:100px;left:50px;">"amount": 149.99,</div>
+        <div class="codeline" style="top:130px;left:50px;">"currency": "USD" }</div>
+        <div class="codeline" style="top:430px;left:30px;">processPayment(tx_98765)</div>
+        <div class="codeline" style="top:460px;left:30px;">funds restored → sender</div>
+        <div class="codeline" style="top:560px;left:40px;">TRANSACTION ID: RFD-0042</div>
+        <div class="funds">funds: [149.99]</div>
+        <div class="refund-badge">
+          <div class="circ">$⇄€</div>
+        </div>
+        <div class="arrows"><span>⟶</span><span>⟵</span></div>
+        <div class="stamp">REFUND SUCCESS</div>
+      </div>
+      <div class="brandfoot">Coinbase × Arize · x402 Hackathon</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 2 -->
+  <section class="slide" id="s2">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:420px;height:420px;background:#15C39A;top:-160px;right:-120px;"></div>
+      <div class="pad">
+        <div class="head">
+          <div class="kicker"><span class="dot"></span>The Team</div>
+          <h2>Team Payback members</h2>
+        </div>
+        <div class="mem-grid">
+          <div class="mem"><div class="av">YS</div><div><div class="nm">Yash Shelar</div><div class="co coinbase">Coinbase</div></div></div>
+          <div class="mem"><div class="av">KK</div><div><div class="nm">Kanishk Kacholia</div><div class="co coinbase">Coinbase</div></div></div>
+          <div class="mem"><div class="av">MS</div><div><div class="nm">Milan Saxena</div><div class="co coinbase">Coinbase</div></div></div>
+          <div class="mem"><div class="av">LV</div><div><div class="nm">Laurie Voss</div><div class="co arize">Arize AI</div></div></div>
+          <div class="mem" style="grid-column:1/3;max-width:491px;"><div class="av">MS</div><div><div class="nm">Manu Saravanakumar</div><div class="co arize">Arize AI</div></div></div>
+        </div>
+      </div>
+      <div class="brandfoot">Team Payback</div>
+      <div class="pageno">02</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 3 -->
+  <section class="slide" id="s3">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:380px;height:380px;background:#F0635E;bottom:-160px;left:-100px;opacity:.35;"></div>
+      <div class="pad">
+        <div class="head">
+          <div class="kicker"><span class="dot"></span>The Problem</div>
+          <h2>A million APIs, one hard question: can you trust it?</h2>
+        </div>
+        <div class="twocol">
+          <div class="qcard cust">
+            <div class="num">01</div>
+            <div class="role">As a customer</div>
+            <div class="q">How do you know you can trust an API when a million competitors offer the same service?</div>
+          </div>
+          <div class="qcard">
+            <div class="num">02</div>
+            <div class="role">As a service</div>
+            <div class="q">How do you advertise your quality in a way buyers can actually verify?</div>
+          </div>
+          <div class="qcard cust">
+            <div class="num">03</div>
+            <div class="role">As a customer</div>
+            <div class="q">Nondeterministic output varies wildly. When quality misses the bar, you want a refund.</div>
+          </div>
+          <div class="qcard">
+            <div class="num">04</div>
+            <div class="role">As a service</div>
+            <div class="q">How do you implement refunds per-request, at scale, without a support queue?</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Team Payback</div>
+      <div class="pageno">03</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 4 -->
+  <section class="slide" id="s4">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:440px;height:440px;background:#15C39A;top:-180px;left:40%;opacity:.4;"></div>
+      <div class="pad">
+        <div class="head">
+          <div class="kicker"><span class="dot"></span>The Solution</div>
+          <h2>Expose evals at the protocol level</h2>
+        </div>
+        <div class="sol-grid">
+          <div class="sol"><div class="ico">∿</div><div class="txt">Run continuous evals for service quality</div></div>
+          <div class="sol"><div class="ico">⇄</div><div class="txt">Expose service metric data as part of the x402 flow</div></div>
+          <div class="sol"><div class="ico">⚖</div><div class="txt">Let agents autonomously decide on price and quality</div></div>
+          <div class="sol"><div class="ico">↩</div><div class="txt">Automatically issue refunds per-request</div></div>
+          <div class="sol"><div class="ico">▦</div><div class="txt">Provide detailed dashboards to the service owner</div></div>
+          <div class="sol"><div class="ico">◎</div><div class="txt">Transparency baked into the protocol itself</div></div>
+          <div class="bigtrust"><span>Protocol-level transparency</span> <span class="eq">=</span> <span>improved user trust</span></div>
+        </div>
+      </div>
+      <div class="brandfoot">Team Payback</div>
+      <div class="pageno">04</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 5 : control flow diagram -->
+  <section class="slide" id="s5">
+    <div class="canvas">
+      <div class="flowwrap">
+        <div class="flowhead">
+          <div class="kicker"><span class="dot"></span>How it works</div>
+          <h2>Control flow</h2>
+          <p class="lead">A pay-per-request handshake where quality is disclosed up front and money is returned automatically when it slips.</p>
+        </div>
+        <div class="lanes" id="lanes"></div>
+      </div>
+      <div class="pageno">05</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 6 : step 1 -->
+  <section class="slide" id="s6">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 1 / 6</div>
+            <h2>Client requests content</h2>
+            <ul class="step-list">
+              <li>An ordinary HTTP request — nothing custom yet</li>
+              <li>The agent simply asks for what it needs</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">request.http</span></div>
+            <div class="code"><span class="k">GET</span> <span class="p">/v1/price/BTC</span><br><span class="k">Host:</span> <span class="p">api.example.com</span><br><br><span class="c">// "What's the current</span><br><span class="c">// price of BTC?"</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">06</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 7 : step 2 -->
+  <section class="slide" id="s7">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 2 / 6</div>
+            <h2>Server responds with HTTP 402</h2>
+            <ul class="step-list">
+              <li>Returns the price of the requested content</li>
+              <li>Extended metadata carries the URL of a metrics endpoint</li>
+              <li class="sub">Metrics are served as JSON</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">402 Payment Required</span></div>
+            <div class="code"><span class="err">HTTP/1.1 402</span><br>{<br>&nbsp;&nbsp;<span class="k">"price"</span>: <span class="n">0.05</span>,<br>&nbsp;&nbsp;<span class="k">"currency"</span>: <span class="s">"USDC"</span>,<br>&nbsp;&nbsp;<span class="k">"metrics_url"</span>:<br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"/.well-known/metrics"</span><br>}</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">07</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 8 : step 3 -->
+  <section class="slide" id="s8">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 3 / 6</div>
+            <h2>Client requests metrics</h2>
+            <ul class="step-list">
+              <li>Server returns a JSON quality report</li>
+              <li class="sub">Uptime</li>
+              <li class="sub">Service quality metrics</li>
+              <li class="sub">Arbitrary, domain-specific eval results</li>
+              <li class="sub">Evaluated as natural language</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">metrics.json</span></div>
+            <div class="code">{<br>&nbsp;&nbsp;<span class="k">"uptime"</span>: <span class="s">"99.98%"</span>,<br>&nbsp;&nbsp;<span class="k">"accuracy"</span>: <span class="n">0.97</span>,<br>&nbsp;&nbsp;<span class="k">"freshness_ms"</span>: <span class="n">120</span>,<br>&nbsp;&nbsp;<span class="k">"eval"</span>: <span class="s">"answers are</span><br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">accurate &amp; current"</span><br>}</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">08</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 9 : step 4 -->
+  <section class="slide" id="s9">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 4 / 6</div>
+            <h2>Client judges the offering</h2>
+            <ul class="step-list">
+              <li>Is the price acceptable?</li>
+              <li>Is the service reliable?</li>
+              <li>Do the evaluations look good?</li>
+              <li class="bail">✕ &nbsp;If not — bail on the transaction</li>
+              <li class="go">✓ &nbsp;If good — send the x402 payment</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">decision.ts</span></div>
+            <div class="code"><span class="k">if</span> (price &lt;= budget<br>&nbsp;&nbsp;&amp;&amp; metrics.ok()) {<br>&nbsp;&nbsp;<span class="s">pay</span>(invoice); <span class="c">// ✓</span><br>} <span class="k">else</span> {<br>&nbsp;&nbsp;<span class="err">abort</span>(); <span class="c">// ✕</span><br>}</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">09</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 10 : step 5 -->
+  <section class="slide" id="s10">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:400px;height:400px;background:#15C39A;top:-160px;right:-100px;opacity:.35;"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 5 / 6</div>
+            <h2>Server delivers the content</h2>
+            <ul class="step-list">
+              <li>Payment clears, the response is returned</li>
+              <li class="go">The client is happy</li>
+              <li style="color:var(--amber);">…or are they?</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">200 OK</span></div>
+            <div class="code"><span class="s">HTTP/1.1 200 OK</span><br>{<br>&nbsp;&nbsp;<span class="k">"symbol"</span>: <span class="s">"BTC"</span>,<br>&nbsp;&nbsp;<span class="k">"price"</span>: <span class="n">64218.40</span>,<br>&nbsp;&nbsp;<span class="k">"ts"</span>: <span class="n">1717603200</span><br>}</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">10</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 11 : step 6 -->
+  <section class="slide" id="s11">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="pad">
+        <div class="step-wrap">
+          <div class="step-left">
+            <div class="stepno">STEP 6 / 6</div>
+            <h2>Server evaluates itself</h2>
+            <ul class="step-list">
+              <li>Runs domain-specific evaluations on what it served</li>
+              <li>Stores results to be returned as service quality</li>
+              <li class="go">If a request triggers quality concerns → automatically return the money</li>
+            </ul>
+          </div>
+          <div class="codecard">
+            <div class="codebar"><i style="background:#F0635E"></i><i style="background:#F2B544"></i><i style="background:#15C39A"></i><span class="t">async eval worker</span></div>
+            <div class="code"><span class="k">const</span> score = <span class="s">eval</span>(resp);<br><span class="k">if</span> (score &lt; threshold) {<br>&nbsp;&nbsp;<span class="s">refund</span>(tx);<br>&nbsp;&nbsp;<span class="c">// funds → sender</span><br>}<br>store(score);</div>
+          </div>
+        </div>
+      </div>
+      <div class="brandfoot">Control flow</div>
+      <div class="pageno">11</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 12 : demo -->
+  <section class="slide" id="s12">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:520px;height:520px;background:#15C39A;top:50%;left:50%;transform:translate(-50%,-50%);opacity:.32;"></div>
+      <div class="divider">
+        <div class="kicker"><span class="dot"></span>Live</div>
+        <h2>Demo time</h2>
+        <div class="sub">Let's watch a refund happen in real time.</div>
+      </div>
+      <div class="pageno">12</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 13 : results -->
+  <section class="slide" id="s13">
+    <div class="canvas">
+      <div class="grid-bg"></div>
+      <div class="glow" style="width:420px;height:420px;background:#3FB6C8;top:-180px;right:30%;opacity:.3;"></div>
+      <div class="pad">
+        <div class="head">
+          <div class="kicker"><span class="dot"></span>Results</div>
+          <h2>What protocol-level transparency buys you</h2>
+        </div>
+        <div class="res-grid">
+          <div class="rescard">
+            <div class="ico">◎</div>
+            <h3>Greater transparency</h3>
+            <p>Quality standards and live metrics are published in the protocol, not buried in marketing.</p>
+          </div>
+          <div class="rescard">
+            <div class="ico">☺</div>
+            <h3>Happy customers</h3>
+            <p>Agents pay with confidence and get their money back automatically when quality slips.</p>
+          </div>
+          <div class="rescard">
+            <div class="ico">▦</div>
+            <h3>Informed service owner</h3>
+            <p>Detailed dashboards turn every request into a feedback signal on real quality.</p>
+          </div>
+        </div>
+        <div class="res-foot">Trust, earned per request. <span class="em">🎉</span></div>
+      </div>
+      <div class="brandfoot">Team Payback</div>
+      <div class="pageno">13</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Previous slide">‹</button>
+  <span class="count"><span id="cur">1</span> / <span id="tot">13</span></span>
+  <button id="next" aria-label="Next slide">›</button>
+</div>
+<div class="hint">← → / space to navigate · F for fullscreen</div>
+
+<script>
+const lanesSVG = `
+<svg viewBox="0 0 680 740" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#5a7185" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ahg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#15C39A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ahr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#F0635E" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- lane headers + guides -->
+  <text x="170" y="22" text-anchor="middle" fill="#3FB6C8" font-size="17" font-weight="700" letter-spacing="2">SERVER</text>
+  <text x="510" y="22" text-anchor="middle" fill="#15C39A" font-size="17" font-weight="700" letter-spacing="2">CLIENT</text>
+  <line x1="170" y1="34" x2="170" y2="730" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
+  <line x1="510" y1="34" x2="510" y2="730" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="5 5"/>
+
+  <!-- 1 client: request -->
+  <g>
+    <rect x="410" y="48" width="200" height="44" rx="11" fill="#13283C" stroke="rgba(21,195,154,.4)"/>
+    <text x="510" y="75" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">1 · Request content</text>
+  </g>
+  <line x1="406" y1="70" x2="234" y2="70" class="arr-svg" marker-end="url(#ah)"/>
+
+  <!-- 2 server: 402 -->
+  <g>
+    <rect x="70" y="106" width="220" height="50" rx="11" fill="#173249" stroke="rgba(240,99,94,.45)"/>
+    <text x="180" y="128" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">2 · HTTP 402 + metadata</text>
+    <text x="180" y="146" text-anchor="middle" fill="#8FA8BC" font-size="12">price · metrics URL</text>
+  </g>
+  <line x1="290" y1="131" x2="446" y2="131" class="arr-svg" marker-end="url(#ah)"/>
+
+  <!-- 3 client: metrics call -->
+  <g>
+    <rect x="410" y="170" width="200" height="44" rx="11" fill="#13283C" stroke="rgba(63,182,200,.4)"/>
+    <text x="510" y="197" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">3 · Call metrics URL</text>
+  </g>
+  <line x1="406" y1="192" x2="234" y2="192" class="arr-svg" marker-end="url(#ah)"/>
+
+  <!-- server: return metrics -->
+  <g>
+    <rect x="70" y="228" width="220" height="44" rx="11" fill="#173249" stroke="rgba(63,182,200,.4)"/>
+    <text x="180" y="255" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Return quality JSON</text>
+  </g>
+  <line x1="290" y1="250" x2="446" y2="250" class="arr-svg" marker-end="url(#ah)"/>
+
+  <!-- 4 client: decision -->
+  <g>
+    <rect x="400" y="286" width="220" height="52" rx="11" fill="#13283C" stroke="rgba(242,181,68,.55)"/>
+    <text x="510" y="308" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">4 · Judge offering</text>
+    <text x="510" y="326" text-anchor="middle" fill="#8FA8BC" font-size="12">price · reliability · evals?</text>
+  </g>
+
+  <!-- branch: NO -> bail (right side) -->
+  <text x="600" y="362" text-anchor="middle" fill="#F0635E" font-size="12.5" font-weight="700">No</text>
+  <line x1="575" y1="338" x2="575" y2="372" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)"/>
+  <g>
+    <rect x="505" y="372" width="140" height="42" rx="11" fill="#173249" stroke="rgba(240,99,94,.55)"/>
+    <text x="575" y="397" text-anchor="middle" fill="#F0635E" font-size="15" font-weight="600">Bail out ✕</text>
+  </g>
+
+  <!-- branch: YES -> send payment (left out, down, back right; clears Judge box) -->
+  <text x="372" y="330" text-anchor="middle" fill="#15C39A" font-size="12.5" font-weight="700">Yes</text>
+  <path d="M400 312 L370 312 L370 446 L466 446" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+  <g>
+    <rect x="470" y="424" width="150" height="44" rx="11" fill="#13283C" stroke="rgba(21,195,154,.5)"/>
+    <text x="545" y="451" text-anchor="middle" fill="#15C39A" font-size="15" font-weight="600">5 · Send payment</text>
+  </g>
+  <!-- payment -> deliver (lower row, clear of green vertical at x=430) -->
+  <path d="M470 462 L400 462 L400 506 L294 506" stroke="#5a7185" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+
+  <!-- server: deliver content -->
+  <g>
+    <rect x="70" y="484" width="220" height="44" rx="11" fill="#173249" stroke="rgba(21,195,154,.5)"/>
+    <text x="180" y="511" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Deliver content</text>
+  </g>
+  <line x1="290" y1="556" x2="446" y2="556" class="arr-svg" marker-end="url(#ah)"/>
+  <g>
+    <rect x="450" y="534" width="160" height="44" rx="11" fill="#13283C" stroke="rgba(255,255,255,.12)"/>
+    <text x="530" y="561" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">Receive content</text>
+  </g>
+
+  <!-- 6 server: async self-eval -->
+  <line x1="180" y1="528" x2="180" y2="594" stroke="#15C39A" stroke-width="2" fill="none" marker-end="url(#ahg)" stroke-dasharray="5 4"/>
+  <text x="210" y="565" fill="#8FA8BC" font-size="11.5" font-style="italic">async</text>
+  <g>
+    <rect x="70" y="594" width="220" height="50" rx="11" fill="#173249" stroke="rgba(124,93,219,.55)"/>
+    <text x="180" y="616" text-anchor="middle" fill="#EAF2F7" font-size="15.5" font-weight="600">6 · Evaluate responses</text>
+    <text x="180" y="634" text-anchor="middle" fill="#8FA8BC" font-size="12">domain-specific quality scoring</text>
+  </g>
+
+  <!-- refund branch -->
+  <line x1="180" y1="644" x2="180" y2="678" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)"/>
+  <g>
+    <rect x="70" y="678" width="220" height="44" rx="11" fill="#173249" stroke="rgba(240,99,94,.5)"/>
+    <text x="180" y="705" text-anchor="middle" fill="#F0635E" font-size="15" font-weight="600">↩ Issue refund if low</text>
+  </g>
+  <path d="M294 700 L510 700 L510 580" stroke="#F0635E" stroke-width="2" fill="none" marker-end="url(#ahr)" stroke-dasharray="5 4"/>
+</svg>`;
+document.getElementById('lanes').innerHTML = lanesSVG;
+
+const slides = Array.from(document.querySelectorAll('.slide'));
+let idx = 0;
+document.getElementById('tot').textContent = slides.length;
+
+function fit(){
+  const sx = window.innerWidth/1280, sy = window.innerHeight/720;
+  const scale = Math.min(sx, sy);
+  document.querySelectorAll('.canvas').forEach(c=>c.style.setProperty('--scale', scale));
+}
+function show(n){
+  idx = Math.max(0, Math.min(slides.length-1, n));
+  slides.forEach((s,i)=>s.classList.toggle('active', i===idx));
+  document.getElementById('cur').textContent = idx+1;
+  document.getElementById('progress').style.width = ((idx+1)/slides.length*100)+'%';
+}
+document.getElementById('next').onclick=()=>show(idx+1);
+document.getElementById('prev').onclick=()=>show(idx-1);
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();show(idx+1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();show(idx-1);}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(slides.length-1);}
+  else if(e.key==='f'||e.key==='F'){
+    if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+let tStart=null;
+document.addEventListener('touchstart',e=>tStart=e.changedTouches[0].clientX);
+document.addEventListener('touchend',e=>{
+  if(tStart===null)return;
+  const dx=e.changedTouches[0].clientX-tStart;
+  if(Math.abs(dx)>50){dx<0?show(idx+1):show(idx-1);}
+  tStart=null;
+});
+window.addEventListener('resize',fit);
+fit();show(0);
+</script>
+</body>
+</html>
